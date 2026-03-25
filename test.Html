@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Таблица данных — Мини-приложение MAX</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 16px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        /* Контейнер для адаптации к MAX */
+        .app-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Заголовок */
+        .header {
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #8e8e93);
+        }
+
+        /* Стили таблицы — адаптивные для мобильного экрана */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 16px 0;
+            border-radius: 12px;
+            background: var(--tg-theme-secondary-bg-color, #f8f8f8);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            background: var(--tg-theme-button-color, #007aff);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 12px 12px;
+            text-align: left;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--tg-theme-section-separator-color, #e5e5ea);
+            white-space: nowrap;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: var(--tg-theme-section-bg-color, #f0f0f0);
+        }
+
+        /* Информационная карточка */
+        .info-card {
+            background: var(--tg-theme-secondary-bg-color, #f8f8f8);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        .info-card p {
+            margin-bottom: 8px;
+        }
+
+        .info-card p:last-child {
+            margin-bottom: 0;
+        }
+
+        .badge {
+            display: inline-block;
+            background: var(--tg-theme-button-color, #007aff);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* Кнопка */
+        .action-button {
+            width: 100%;
+            padding: 14px;
+            background: var(--tg-theme-button-color, #007aff);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-top: 12px;
+        }
+
+        .action-button:active {
+            opacity: 0.7;
+        }
+
+        /* Состояния загрузки */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-theme-hint-color, #8e8e93);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>📊 Данные по проектам</h1>
+            <div class="subtitle">Статистика за март 2026</div>
+        </div>
+
+        <!-- Контейнер для динамической таблицы -->
+        <div id="table-container">
+            <div class="loading">Загрузка данных...</div>
+        </div>
+
+        <div class="info-card">
+            <p><span class="badge">ℹ️</span> Мини-приложение MAX</p>
+            <p>Таблица обновляется автоматически при открытии.</p>
+            <p>Данные можно загружать из API или передавать через startapp.</p>
+        </div>
+
+        <button class="action-button" id="refreshBtn">🔄 Обновить данные</button>
+    </div>
+
+    <script>
+        // ============================================================
+        // Инициализация WebApp (MAX Bridge)
+        // Подключаемся к API MAX, чтобы получать тему, параметры и управлять интерфейсом
+        // ============================================================
+        
+        let tg = null;
+        let startPayload = null;
+
+        // Пытаемся получить объект WebApp от MAX
+        // Если код запущен в MAX — window.Telegram.WebApp будет доступен
+        // MAX совместим с Telegram WebApp API
+        if (window.Telegram && window.Telegram.WebApp) {
+            tg = window.Telegram.WebApp;
+            
+            // Сообщаем MAX, что приложение готово
+            tg.ready();
+            
+            // Расширяем приложение на весь экран (скрываем кнопки навигации)
+            tg.expand();
+            
+            // Получаем стартовые параметры (из диплинка ?startapp=...)
+            if (tg.initDataUnsafe && tg.initDataUnsafe.start_param) {
+                startPayload = tg.initDataUnsafe.start_param;
+                console.log('Получен payload:', startPayload);
+            }
+            
+            // Применяем тему MAX к странице
+            // MAX автоматически передает цвета темы, их можно использовать в CSS-переменных
+            document.body.style.backgroundColor = tg.themeParams.bg_color || '#ffffff';
+            document.body.style.color = tg.themeParams.text_color || '#000000';
+            
+            // Слушаем изменение темы (пользователь переключил светлую/темную)
+            tg.onEvent('themeChanged', function() {
+                document.body.style.backgroundColor = tg.themeParams.bg_color || '#ffffff';
+                document.body.style.color = tg.themeParams.text_color || '#000000';
+            });
+            
+            // Показываем кнопку "Назад" в шапке MAX, если нужно
+            // tg.BackButton.show();
+            // tg.BackButton.onClick(function() { tg.close(); });
+        } else {
+            console.log('Приложение запущено вне MAX, используем fallback стили');
+            // Fallback для тестирования в обычном браузере
+        }
+
+        // ============================================================
+        // Данные для таблицы (можно заменить на API-запрос)
+        // ============================================================
+        
+        const defaultData = [
+            { id: 1, project: "Интеграция MAX API", status: "Готово", progress: "100%", owner: "Анна К." },
+            { id: 2, project: "Мини-приложение Таблицы", status: "В разработке", progress: "75%", owner: "Иван П." },
+            { id: 3, project: "Чат-бот для поддержки", status: "Тестирование", progress: "90%", owner: "Мария С." },
+            { id: 4, project: "Аналитика по платежам", status: "План", progress: "30%", owner: "Дмитрий В." },
+            { id: 5, project: "Интеграция СБП", status: "Завершено", progress: "100%", owner: "Елена Т." }
+        ];
+
+        // Если передан payload с данными (например, идентификатор отчета), можно подгрузить другие данные
+        let currentData = [...defaultData];
+        
+        // Если через startapp передали параметр, можно изменить данные
+        if (startPayload) {
+            console.log('Загрузка данных с параметром:', startPayload);
+            // Пример: если передали "project_id=5", можно загрузить конкретный проект
+            // Здесь просто добавим отметку в данные
+            currentData[0].project = currentData[0].project + ` (ref: ${startPayload})`;
+        }
+
+        // ============================================================
+        // Функция отрисовки таблицы
+        // ============================================================
+        
+        function renderTable(data) {
+            const container = document.getElementById('table-container');
+            
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="info-card">Нет данных для отображения</div>';
+                return;
+            }
+            
+            // Формируем HTML таблицы
+            let tableHTML = `
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Проект</th>
+                                <th>Статус</th>
+                                <th>Прогресс</th>
+                                <th>Ответственный</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.forEach(row => {
+                tableHTML += `
+                    <tr>
+                        <td>${escapeHtml(row.id.toString())}</td>
+                        <td><strong>${escapeHtml(row.project)}</strong></td>
+                        <td>${getStatusBadge(row.status)}</td>
+                        <td>${escapeHtml(row.progress)}</td>
+                        <td>${escapeHtml(row.owner)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = tableHTML;
+            
+            // Уведомляем MAX об изменении размера (чтобы корректно отображался скролл)
+            if (tg) {
+                tg.ready(); // повторный вызов не страшен
+            }
+        }
+        
+        // Вспомогательная функция: защита от XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        
+        // Визуальный статус с цветом
+        function getStatusBadge(status) {
+            const statusColors = {
+                'Готово': '#34c759',
+                'Завершено': '#34c759',
+                'В разработке': '#ff9500',
+                'Тестирование': '#5856d6',
+                'План': '#ff3b30'
+            };
+            const color = statusColors[status] || '#8e8e93';
+            return `<span style="display:inline-block; padding:4px 10px; background:${color}; color:white; border-radius:20px; font-size:12px; font-weight:500;">${escapeHtml(status)}</span>`;
+        }
+        
+        // ============================================================
+        // Загрузка данных (имитация API)
+        // ============================================================
+        
+        async function loadData() {
+            // Показываем индикатор загрузки
+            document.getElementById('table-container').innerHTML = '<div class="loading">🔄 Обновление данных...</div>';
+            
+            // Имитация запроса к API (задержка 0.5 сек)
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Здесь можно сделать реальный fetch к вашему бэкенду
+            // Пример: const response = await fetch('https://api.example.com/data');
+            // const newData = await response.json();
+            
+            // Для демонстрации обновим прогресс случайными числами
+            const updatedData = currentData.map(item => {
+                if (item.progress !== '100%' && item.progress !== 'Готово') {
+                    let currentPercent = parseInt(item.progress);
+                    if (isNaN(currentPercent)) currentPercent = 0;
+                    let newPercent = Math.min(100, currentPercent + Math.floor(Math.random() * 15));
+                    return {
+                        ...item,
+                        progress: `${newPercent}%`
+                    };
+                }
+                return item;
+            });
+            
+            currentData = updatedData;
+            renderTable(currentData);
+            
+            // Если есть tg, можно показать всплывающее уведомление (Haptic Feedback)
+            if (tg && tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
+            }
+        }
+        
+        // ============================================================
+        // Обработчики кнопок
+        // ============================================================
+        
+        function setupEventListeners() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => {
+                    loadData();
+                });
+            }
+        }
+        
+        // ============================================================
+        // Инициализация приложения
+        // ============================================================
+        
+        function init() {
+            renderTable(currentData);
+            setupEventListeners();
+            
+            // Если приложение запущено в MAX, можно отправить событие о готовности
+            if (tg) {
+                // Сообщаем платформе, что высота контента изменилась
+                tg.ready();
+            }
+        }
+        
+        // Запускаем приложение после полной загрузки DOM
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
